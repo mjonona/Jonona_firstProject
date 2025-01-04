@@ -1,4 +1,6 @@
-# 📦 Streamlit App Starter Kit 
+# 📦 Jonona First Project
+
+Today will create my first project
 ```
 ⬆️ (Replace above with your app's name)
 ```
