@@ -17,3 +17,4 @@ with st.expander('Data'):
 
 with st.sidebar:
   st.header("Введети признаки: ")
+  island=st.selectbox('Island', ('Torgersen', 'Dream','Biscoe'))
