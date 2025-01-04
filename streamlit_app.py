@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 st.title('🎈 My First Project')
 
@@ -23,3 +24,5 @@ with st.sidebar:
   flipper_length_mm = st.slider('Flipper length (mm)', 32.1, 59.6, 44.5)
   body_mass_g = st.slider('Body mass (g)', 32.1, 59.6, 44.5)
   gender=st.selectbox('Gender', ('female', 'male'))
+
+# Plotting some features
