@@ -1,11 +1,12 @@
-streamlit
-pandas
-numpy
-matplotlib
+numpy>=1.21
+catboost>=1.0.3
 seaborn
-joblib
+pandas
+matplotlib
 scikit-learn
 xgboost
-catboost
+streamlit
+joblib
+
 
 
