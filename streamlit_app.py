@@ -28,9 +28,6 @@ class CustomXGBRegressor(BaseEstimator, RegressorMixin):
     def __sklearn_tags__(self):
         return {"estimator_type": "regressor"}
 
-xgb_reg = CustomXGBRegressor(random_state=42)
-grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2', cv=3)
-
 st.title("Прогноз качества воздуха")
 
 # Загрузка Данных
@@ -105,7 +102,6 @@ grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2
 
 # GridSearchCV
 st.write("Обучение XGBRegressor...")
-grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2', cv=3, verbose=0)
 grid_search.fit(X_train, y_train)
 
 best_model = grid_search.best_estimator_
