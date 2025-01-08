@@ -17,6 +17,7 @@ st.title("Прогноз качества воздуха")
 def load_data():
     # Загрузка данных
     pollution_data = pd.read_csv("updated_pollution_dataset.csv")
+    
     pollution_data.columns = pollution_data.columns.str.strip()
     
     # Кодирование Air Quality
