@@ -6,13 +6,13 @@ import matplotlib.pyplot as plt
 import joblib
 import catboost
 import sklearn
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, r2_score
 from math import sqrt
 from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
-
 from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.utils import is_classifier
 
 class CustomXGBRegressor(BaseEstimator, RegressorMixin):
     def __init__(self, **params):
@@ -29,19 +29,6 @@ class CustomXGBRegressor(BaseEstimator, RegressorMixin):
         return {"estimator_type": "regressor"}
 
 st.title("Прогноз качества воздуха")
-from sklearn.utils import is_classifier
-print(f"Is classifier: {is_classifier(xgb_reg)}")
-grid_search.fit(X_train, y_train)
-
-from sklearn.model_selection import RandomizedSearchCV
-
-# Or manually:
-for n_est in param_grid['n_estimators']:
-    for depth in param_grid['max_depth']:
-        for lr in param_grid['learning_rate']:
-            model = CustomXGBRegressor(n_estimators=n_est, max_depth=depth, learning_rate=lr)
-            model.fit(X_train, y_train)
-            # Evaluate model here
 
 # Загрузка Данных
 @st.cache
@@ -115,6 +102,7 @@ grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2
 
 # GridSearchCV
 st.write("Обучение XGBRegressor...")
+print(f"Is classifier: {is_classifier(xgb_reg)}")  # This should be False for regression
 grid_search.fit(X_train, y_train)
 
 best_model = grid_search.best_estimator_
