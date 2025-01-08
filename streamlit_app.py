@@ -12,7 +12,7 @@ from catboost import CatBoostRegressor
 
 st.title("Прогноз качества воздуха")
 
-# Загрузка данных
+# Загрузка Данных
 @st.cache
 def load_data():
     # Загрузка данных
