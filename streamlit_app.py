@@ -4,29 +4,11 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import joblib
-import catboost
-import sklearn
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, RandomizedSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.metrics import mean_squared_error, r2_score
 from math import sqrt
 from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
-from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.utils import is_classifier
-
-class CustomXGBRegressor(BaseEstimator, RegressorMixin):
-    def __init__(self, **params):
-        self.model = XGBRegressor(**params)
-    
-    def fit(self, X, y):
-        self.model.fit(X, y)
-        return self
-    
-    def predict(self, X):
-        return self.model.predict(X)
-    
-    def __sklearn_tags__(self):
-        return {"estimator_type": "regressor"}
 
 st.title("Прогноз качества воздуха")
 
@@ -90,19 +72,18 @@ y = pollution_data_filtered['Air Quality']
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+# Обучение моделей
 st.subheader("Обучение моделей")
 param_grid = {
     'n_estimators': [50, 100, 200],
     'max_depth': [3, 5, 7],
     'learning_rate': [0.01, 0.1, 0.2]
 }
-
-xgb_reg = CustomXGBRegressor(random_state=42)
-grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2', cv=3)
+xgb_reg = XGBRegressor(random_state=42)
 
 # GridSearchCV
 st.write("Обучение XGBRegressor...")
-print(f"Is classifier: {is_classifier(xgb_reg)}")  # This should be False for regression
+grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2', cv=3, verbose=0)
 grid_search.fit(X_train, y_train)
 
 best_model = grid_search.best_estimator_
