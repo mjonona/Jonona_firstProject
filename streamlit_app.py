@@ -93,14 +93,15 @@ y = pollution_data_filtered['Air Quality']
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Обучение моделей
 st.subheader("Обучение моделей")
 param_grid = {
     'n_estimators': [50, 100, 200],
     'max_depth': [3, 5, 7],
     'learning_rate': [0.01, 0.1, 0.2]
 }
-xgb_reg = XGBRegressor(random_state=42)
+
+xgb_reg = CustomXGBRegressor(random_state=42)
+grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2', cv=3)
 
 # GridSearchCV
 st.write("Обучение XGBRegressor...")
