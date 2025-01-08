@@ -29,6 +29,19 @@ class CustomXGBRegressor(BaseEstimator, RegressorMixin):
         return {"estimator_type": "regressor"}
 
 st.title("Прогноз качества воздуха")
+from sklearn.utils import is_classifier
+print(f"Is classifier: {is_classifier(xgb_reg)}")
+grid_search.fit(X_train, y_train)
+
+from sklearn.model_selection import RandomizedSearchCV
+
+# Or manually:
+for n_est in param_grid['n_estimators']:
+    for depth in param_grid['max_depth']:
+        for lr in param_grid['learning_rate']:
+            model = CustomXGBRegressor(n_estimators=n_est, max_depth=depth, learning_rate=lr)
+            model.fit(X_train, y_train)
+            # Evaluate model here
 
 # Загрузка Данных
 @st.cache
