@@ -4,6 +4,6 @@ matplotlib
 seaborn
 joblib
 scikit-learn
-xgboost>=2.0.0
+xgboost
 numpy>=1.22.0
 catboost>=1.3
