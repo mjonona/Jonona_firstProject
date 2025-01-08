@@ -69,29 +69,26 @@ with st.expander("Преобразование данных"):
 # ========================
 # 3) Визуализация данных (Plotly)
 # ========================
+st.subheader("Визуализация данных")
 
-# 2) Пример корреляции
-if st.checkbox("Показать корреляции"):
-    st.subheader("Матрица корреляций")
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(df.corr(), annot=True, cmap="viridis", ax=ax)
-    st.pyplot(fig)
+# Пример: график PM10 vs. Air Quality
+fig1 = px.scatter(
+    df,
+    x='PM10',
+    y='Air Quality',
+    title='Air Quality vs. PM10'
+)
+st.plotly_chart(fig1)
 
-# 3) Scatter Plot (Seaborn)
-st.subheader("Пример Scatter-плота (Air Quality vs PM10)")
-fig, ax = plt.subplots(figsize=(7, 5))
-sns.scatterplot(data=df, x='PM10', y='Air Quality', ax=ax)
-ax.set_title("Air Quality vs. PM10")
-st.pyplot(fig)
+# Пример: гистограмма PM2.5
+fig2 = px.histogram(
+    df,
+    x='PM2.5',
+    nbins=30,
+    title='Распределение PM2.5'
+)
+st.plotly_chart(fig2)
 
-# 4) Histogram (Seaborn)
-st.subheader("Пример гистограммы (PM2.5)")
-fig2, ax2 = plt.subplots(figsize=(7, 5))
-sns.histplot(data=df, x='PM2.5', bins=30, kde=False, ax=ax2)
-ax2.set_title("Распределение PM2.5")
-st.pyplot(fig2)
-
-st.write("**Приложение завершено**")
 # ========================
 # 4) Пользовательский ввод (Sidebar)
 # ========================
