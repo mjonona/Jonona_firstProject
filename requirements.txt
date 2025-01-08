@@ -3,7 +3,7 @@ pandas
 matplotlib
 seaborn
 joblib
-scikit-learn>=1.4
+scikit-learn
 xgboost>=2.0.0
 numpy>=1.22.0
 catboost>=1.3
