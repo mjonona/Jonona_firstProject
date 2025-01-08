@@ -1,48 +1,57 @@
-# =====================
-# 1) Imports & Setup
-# =====================
+import streamlit as st
 import pandas as pd
 import numpy as np
-
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
+import joblib
 
-# Machine Learning
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.metrics import mean_squared_error, r2_score
 from math import sqrt
 
-# Models
 from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
 
-# Saving/Loading Models
-import joblib
+# -------------------------
+# 1) Заголовок приложения
+# -------------------------
+st.title("Прогноз качества воздуха")
 
-# =====================
-# 2) Load and Preview Data
-# =====================
-pollution_data = pd.read_csv('updated_pollution_dataset.csv')
-print("Initial Data (head):")
-print(pollution_data.head())
+# -------------------------
+# 2) Загрузка данных
+# -------------------------
+@st.cache_data
+def load_data(path: str = "updated_pollution_dataset.csv") -> pd.DataFrame:
+    """
+    Загружает CSV-файл, чистит названия столбцов и кодирует признак 'Air Quality'.
+    """
+    df = pd.read_csv(path)
+    df.columns = df.columns.str.strip()
+    
+    # Кодирование категорий Air Quality
+    air_quality_mapping = {
+        'Good': 1,
+        'Hazardous': 4,
+        'Moderate': 2,
+        'Poor': 3
+    }
+    df['Air Quality'] = df['Air Quality'].map(air_quality_mapping)
+    
+    return df
 
-# =====================
-# 3) Preprocessing
-# =====================
+pollution_data = load_data()
 
-# Clean up column names for consistency
-pollution_data.columns = pollution_data.columns.str.strip()
+# -------------------------
+# 3) Отображение данных
+# -------------------------
+if st.checkbox("Показать данные"):
+    st.write("**Данные (первые 5 строк):**")
+    st.write(pollution_data.head())
 
-# Encoding Air Quality into numerical values
-air_quality_mapping = {
-    'Good': 1,
-    'Hazardous': 4,
-    'Moderate': 2,
-    'Poor': 3
-}
-pollution_data['Air Quality'] = pollution_data['Air Quality'].map(air_quality_mapping)
-
-# Selecting relevant columns for analysis
+# -------------------------
+# 4) Подготовка данных
+# -------------------------
+# Определяем нужные столбцы
 columns = [
     'Air Quality',
     'PM2.5',
@@ -54,109 +63,102 @@ columns = [
     'Humidity',
     'Proximity_to_Industrial_Areas'
 ]
+
+# Выбираем нужные столбцы и переименовываем для удобства
 pollution_data_filtered = pollution_data[columns].rename(
     columns={'Proximity_to_Industrial_Areas': 'Industrial Proximity'}
 )
 
-# Optional: display basic data info
-print("\nFiltered Data (head):")
-print(pollution_data_filtered.head())
-print("\nData Description:")
-print(pollution_data_filtered.describe())
+# -------------------------
+# 5) Корреляции и визуализация
+# -------------------------
+if st.checkbox("Показать корреляции"):
+    st.subheader("Корреляции с признаком 'Air Quality'")
+    correlations = pollution_data_filtered.corr()['Air Quality'][1:]
+    st.write(correlations)
 
-# =====================
-# 4) Exploratory Analysis
-# =====================
+    # Построение scatter plot для каждого признака vs Air Quality
+    st.subheader("Взаимосвязь между признаками")
+    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
+    # Перебираем все столбцы, кроме Air Quality
+    for i, column in enumerate(pollution_data_filtered.columns[1:], start=1):
+        ax = axes[(i - 1) // 3, (i - 1) % 3]
+        sns.scatterplot(
+            data=pollution_data_filtered,
+            x=column, 
+            y='Air Quality',
+            ax=ax
+        )
+        ax.set_title(f'Air Quality vs {column}')
+    st.pyplot(fig)
 
-# 4.1 Calculate correlation with Air Quality
-correlations = pollution_data_filtered.corr()['Air Quality'][1:]
-print("\nCorrelations with Air Quality (excluding itself):")
-print(correlations)
-
-# 4.2 Scatter plots (Air Quality vs each feature)
-plt.figure(figsize=(15, 10))
-for i, column in enumerate(pollution_data_filtered.columns[1:], start=1):
-    plt.subplot(3, 3, i)
-    sns.scatterplot(
-        data=pollution_data_filtered, 
-        x=column, 
-        y='Air Quality'
-    )
-    plt.title(f'Air Quality vs {column}')
-    plt.xlabel(column)
-    plt.ylabel('Air Quality')
-plt.tight_layout()
-plt.show()
-
-# =====================
-# 5) Prepare Data for Modeling
-# =====================
-
-# Optionally drop 'PM2.5' if that's intended
-pollution_data_filtered = pollution_data_filtered.drop(columns=['PM2.5'])
-
-# Create feature matrix X and target y
-X = pollution_data_filtered.drop(columns=['Air Quality'])
+# -------------------------
+# 6) Формирование X, y
+# -------------------------
+# Удаляем 'PM2.5' (по условию кода) и 'Air Quality' из признаков
+X = pollution_data_filtered.drop(columns=['Air Quality', 'PM2.5'])
 y = pollution_data_filtered['Air Quality']
 
-# Train-test split
+# Разделение на обучающую и тестовую выборки
 X_train, X_test, y_train, y_test = train_test_split(
     X, 
     y, 
     test_size=0.2, 
     random_state=42
 )
-print("\nData Shapes:")
-print(f"  X_train: {X_train.shape}, X_test: {X_test.shape}")
-print(f"  y_train: {y_train.shape}, y_test: {y_test.shape}")
 
-# =====================
-# 6) Hyperparameter Tuning (XGBRegressor)
-# =====================
+# -------------------------
+# 7) Обучение моделей (XGB + GridSearchCV)
+# -------------------------
+st.subheader("Обучение моделей")
 
-# Grid of hyperparameters
+# Сетка гиперпараметров
 param_grid = {
     'n_estimators': [50, 100, 200],
     'max_depth': [3, 5, 7],
     'learning_rate': [0.01, 0.1, 0.2]
 }
 
-# Initialize model
+# Инициализация XGB
 xgb_reg = XGBRegressor(random_state=42)
 
 # GridSearchCV
+st.write("Обучение XGBRegressor...")
 grid_search = GridSearchCV(
-    estimator=xgb_reg,
-    param_grid=param_grid,
-    scoring='r2',
-    cv=3,
-    verbose=1
+    estimator=xgb_reg, 
+    param_grid=param_grid, 
+    scoring='r2', 
+    cv=3, 
+    verbose=0
 )
 grid_search.fit(X_train, y_train)
 
-# Best model
+# Лучшая модель и её результаты
 best_model = grid_search.best_estimator_
-print("\nBest Parameters from GridSearchCV:")
-print(grid_search.best_params_)
+best_params = grid_search.best_params_
+st.write(f"Лучшие параметры: {best_params}")
 
-# Evaluate on test set
 y_pred_best = best_model.predict(X_test)
-print("\nPerformance of the Best Model on the Test Set:")
-print("  R²:", r2_score(y_test, y_pred_best))
+r2_best = r2_score(y_test, y_pred_best)
+mse_best = mean_squared_error(y_test, y_pred_best)
+rmse_best = sqrt(mse_best)
 
-# 6.1 Cross-validation on the best model
+st.write(f"R² для лучшей модели: {r2_best:.4f}")
+st.write(f"MSE для лучшей модели: {mse_best:.4f}")
+st.write(f"RMSE для лучшей модели: {rmse_best:.4f}")
+
+# -------------------------
+# 8) Кросс-валидация
+# -------------------------
 cv_scores = cross_val_score(best_model, X_train, y_train, cv=5, scoring='r2')
-print("  Average R² (Cross-Validation):", cv_scores.mean())
+st.write(f"Средний R² на кросс-валидации: {cv_scores.mean():.4f}")
 
-# 6.2 RMSE
-rmse = sqrt(mean_squared_error(y_test, y_pred_best))
-print("  RMSE:", rmse)
+# -------------------------
+# 9) Сравнение CatBoost и XGB
+# -------------------------
+st.subheader("Сравнение моделей CatBoost и XGB")
 
-# =====================
-# 7) Compare with CatBoost
-# =====================
-
-# CatBoost Regressor
+# CatBoost
 catboost_reg = CatBoostRegressor(
     iterations=100,
     depth=5,
@@ -169,95 +171,59 @@ y_pred_cat = catboost_reg.predict(X_test)
 mse_cat = mean_squared_error(y_test, y_pred_cat)
 r2_cat = r2_score(y_test, y_pred_cat)
 
-# XGBoost (manually configured) for comparison
-xgb_reg_manual = XGBRegressor(
+# XGB (с ручными параметрами)
+xgb_reg_comp = XGBRegressor(
     n_estimators=100,
     max_depth=5,
     learning_rate=0.1,
     random_state=42
 )
-xgb_reg_manual.fit(X_train, y_train)
-y_pred_xgb = xgb_reg_manual.predict(X_test)
+xgb_reg_comp.fit(X_train, y_train)
+y_pred_xgb = xgb_reg_comp.predict(X_test)
 mse_xgb = mean_squared_error(y_test, y_pred_xgb)
 r2_xgb = r2_score(y_test, y_pred_xgb)
 
-print("\nComparison:")
-print("  CatBoostRegressor => MSE:", mse_cat, ", R²:", r2_cat)
-print("  XGBRegressor      => MSE:", mse_xgb, ", R²:", r2_xgb)
+st.write("**CatBoostRegressor**:")
+st.write(f"MSE: {mse_cat:.4f}, R²: {r2_cat:.4f}")
+st.write("**XGBRegressor**:")
+st.write(f"MSE: {mse_xgb:.4f}, R²: {r2_xgb:.4f}")
 
-# =====================
-# 8) Feature Importances (from best XGB model)
-# =====================
+# -------------------------
+# 10) Важность признаков
+# -------------------------
+st.subheader("Важность признаков (по лучшей XGB-модели)")
 feature_importances = best_model.feature_importances_
-
-# Sort feature importances
 indices = np.argsort(feature_importances)[::-1]
 names = [X_train.columns[i] for i in indices]
 
-# Plot
-plt.figure(figsize=(10, 6))
-plt.barh(range(len(names)), feature_importances[indices], align='center')
-plt.yticks(range(len(names)), names)
-plt.xlabel('Feature Importance')
-plt.ylabel('Features')
-plt.title('Feature Importance - Best XGB Model')
-plt.gca().invert_yaxis()
-plt.show()
+fig, ax = plt.subplots()
+ax.barh(names, feature_importances[indices])
+ax.set_title("Важность признаков")
+ax.invert_yaxis()  # чтобы самый важный был сверху
+st.pyplot(fig)
 
-# =====================
-# 9) Save Model & Test Loading
-# =====================
+# -------------------------
+# 11) Предсказание новых данных
+# -------------------------
+st.subheader("Предсказание новых данных")
 
-joblib.dump(best_model, "xgb_regressor.pkl")
-print("\nModel saved as 'xgb_regressor.pkl'.")
+new_data = {
+    'PM10': st.number_input("PM10", value=17.9),
+    'NO2': st.number_input("NO2", value=18.9),
+    'SO2': st.number_input("SO2", value=9.2),
+    'CO': st.number_input("CO", value=1.72),
+    'Temperature': st.number_input("Temperature", value=29.8),
+    'Humidity': st.number_input("Humidity", value=59.1),
+    'Industrial Proximity': st.number_input("Industrial Proximity", value=6.3)
+}
+new_data_df = pd.DataFrame([new_data])
 
-loaded_model = joblib.load("xgb_regressor.pkl")
-print("Reloaded model successfully.")
-
-# Test the loaded model on new data
-new_data = pd.DataFrame({
-    'PM10': [17.9],
-    'NO2': [18.9],
-    'SO2': [9.2],
-    'CO': [1.72],
-    'Temperature': [29.8],
-    'Humidity': [59.1],
-    'Industrial Proximity': [6.3]
-})
-prediction = loaded_model.predict(new_data)
-print("\nPrediction on new data:", prediction[0])
-
-# Reverse mapping to original Air Quality categories
-reverse_mapping = {1: 'Good', 2: 'Moderate', 3: 'Poor', 4: 'Hazardous'}
-predicted_category = round(prediction[0])
-predicted_label = reverse_mapping.get(predicted_category, "Unknown")
-print("Predicted Air Quality category:", predicted_label)
-
-# =====================
-# 10) Train Final Model on Full Data & Save
-# =====================
-
-X_full = pd.concat([X_train, X_test], axis=0)
-y_full = pd.concat([y_train, y_test], axis=0)
-
-# Use the best hyperparams found by GridSearchCV
-best_params = grid_search.best_params_
-
-final_model = XGBRegressor(
-    learning_rate=best_params['learning_rate'],
-    max_depth=best_params['max_depth'],
-    n_estimators=best_params['n_estimators'],
-    random_state=42
-)
-
-final_model.fit(X_full, y_full)
-joblib.dump(final_model, "final_xgb_model.pkl")
-print("\nTrained final model on the entire dataset and saved to 'final_xgb_model.pkl'.")
-
-y_full_pred = final_model.predict(X_full)
-mse_full = mean_squared_error(y_full, y_full_pred)
-r2_full = r2_score(y_full, y_full_pred)
-
-print("Evaluation on full dataset:")
-print(f"  MSE: {mse_full:.4f}")
-print(f"  R²:  {r2_full:.4f}")
+if st.button("Сделать прогноз"):
+    prediction = best_model.predict(new_data_df)[0]
+    reverse_mapping = {1: 'Good', 2: 'Moderate', 3: 'Poor', 4: 'Hazardous'}
+    predicted_category = round(prediction)
+    
+    if predicted_category in reverse_mapping:
+        st.write(f"Прогнозируемое качество воздуха: **{reverse_mapping[predicted_category]}**")
+    else:
+        st.write("Прогнозируемое качество воздуха за пределами известных категорий.")
