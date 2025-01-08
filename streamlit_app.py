@@ -9,7 +9,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 from math import sqrt
 from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
-
+№
 st.title("Прогноз качества воздуха")
 
 # Загрузка данных
