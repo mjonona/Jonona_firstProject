@@ -10,7 +10,7 @@ import seaborn as sns
 from math import sqrt
 
 ###############################
- ЧАСТЬ 1. ПРЕЗЕНТАЦИЯ
+ # ЧАСТЬ 1. ПРЕЗЕНТАЦИЯ
 ###############################
 
 st.title("Презентация проекта: Прогноз Air Quality")
@@ -141,9 +141,17 @@ X = df_filtered.drop(columns=['Air Quality'])
 y = df_filtered['Air Quality']
 
 # Отображаем корреляции
-if st.checkbox("Показать корреляции c Air Quality"):
-    corr_series = df_filtered.corr()['Air Quality'][1:]
-    st.write(corr_series)
+# Вычисление корреляций
+if st.checkbox("Показать корреляции"):
+    correlations = pollution_data_filtered.corr()['Air Quality'][1:]
+    st.write(correlations)
+
+    # Построение scatter plot
+    st.subheader("Взаимосвязь между признаками")
+    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
+    for i, column in enumerate(pollution_data_filtered.columns[1:], start=1):
+        sns.scatterplot(data=pollution_data_filtered, x=column, y='Air Quality', ax=axes[(i - 1) // 3, (i - 1) % 3])
+    st.pyplot(fig)
 
     # Графики разброса (scatter plots)
     fig, axes = plt.subplots(3, 3, figsize=(15, 10))
