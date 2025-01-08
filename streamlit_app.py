@@ -1,128 +1,51 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 
-from sklearn.model_selection import train_test_split, GridSearchCV
+# ML imports
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from xgboost import XGBRegressor
-import matplotlib.pyplot as plt
-import seaborn as sns
-from math import sqrt
 
-###############################
- # ЧАСТЬ 1. ПРЕЗЕНТАЦИЯ
-###############################
+st.title("Прогноз качества воздуха (Air Quality)")
 
-st.title("Презентация проекта: Прогноз Air Quality")
-
-# 1) Коротко о себе
-st.subheader("1. Коротко о себе")
 st.write("""
-Меня зовут [Ваше имя]. Я — QA Engineer в компании «Согд Дизайн». 
-Моя основная задача — тестировать веб-приложение **Simple EMR for personal injury clinics** 
-(система для медицинских клиник по травматологии) и следить за качеством продукта.
+Демонстрация Streamlit-приложения для **регрессии** уровня загрязнения воздуха.
 """)
 
-# 2) Тема проекта
-st.subheader("2. Тема проекта и польза")
-st.write("""
-**Тема**: Прогноз качества воздуха (Air Quality). 
-
-Почему выбрала:
-- В Душанбе часто наблюдается низкое качество воздуха, и мне интересно изучить, 
-  какие факторы (PM2.5, PM10, NO2, SO2, CO, температура, влажность, близость к промышленным зонам и т.д.) 
-  сильнее всего влияют на итоговый показатель Air Quality.
-- Данные для обучения взяты с Kaggle (примерный набор с показателями загрязнения).
-- Такой проект может помочь лучше понять, какие загрязнители наиболее опасны для здоровья людей в городе.
-""")
-
-# 3) Бейзлайн и метрика успеха
-st.subheader("3. Бейзлайн и метрики")
-st.write("""
-- **Бейзлайн**:
-  - В качестве таргета берём показатель Air Quality 
-  - Цель — проверить, что наша модель даёт более точный прогноз
-
-- **Метрики**:
-  - **R² (коэффициент детерминации)**: чем ближе к 1, тем лучше модель объясняет вариацию качества воздуха.
-  - **MSE (среднеквадратичная ошибка)** или **RMSE**: чем ниже, тем лучше; 
-    показывает, насколько сильно модель ошибается в среднем.
-
-- **Успешные значения**:
-  - R² > 0.8 часто считается хорошим показателем для регрессии в задачах экологии.
-  - Чем ниже MSE, тем лучше. Конкретный порог зависит от диапазона данных по загрязнению.
-""")
-
-# 4) Проделанные шаги
-st.subheader("4. Проделанные шаги")
-st.write("""
-1) **Сбор и очистка данных**: 
-   - Взяла датасет с Kaggle, 
-   - Удалила пропуски и аномальные значения (если были).
-2) **Анализ признаков**:
-   - Посмотрела, какие показатели (PM2.5, PM10, NO2 и т.п.) сильнее связаны с Air Quality.
-3) **Разделение на train/test**:
-   - Применяла `train_test_split` для оценки качества модели.
-4) **Обучение моделей**:
-   - Пробовала XGBoost, настраивала гиперпараметры через `GridSearchCV`.
-5) **Оценка результатов**:
-   - На основе R², MSE, и выбрала лучшую модель.
-6) **Финальный вывод**:
-   - Создала интерактивное демо-приложение в Streamlit, где пользователь может ввести свои параметры загрязнения 
-     и получить мгновенный прогноз Air Quality.
-""")
-
-# 5) Результат и выводы
-st.subheader("5. Результаты и выводы")
-st.write("""
-- Итог: Модель обучена на полном наборе данных и сохранена как 'final_xgb_model.pkl'.
-Оценка модели на полном наборе данных:
-Mean Squared Error (MSE): 0.0170
-R² Score: 0.9830
-- В перспективе можно расширить датасет реальными данными из Душанбе, 
-  чтобы адаптировать модель к локальным особенностям.
-""")
-
-st.markdown("---")
-st.header("ДЕМО МОДЕЛИ (XGBRegressor + GridSearchCV)")
-
-###############################
-#  ЧАСТЬ 2. DEMO МОДЕЛИ
-###############################
-
-# Загрузка данных
+# ========================
+# 1) Загрузка и изучение данных
+# ========================
 @st.cache_data
 def load_data(path: str = "updated_pollution_dataset.csv"):
     df = pd.read_csv(path)
+    # Чистим названия столбцов
     df.columns = df.columns.str.strip()
-    # Предположим, в столбце 'Air Quality' уже числовые значения (1..4) 
+    # Кодируем Air Quality (если необходимо)
+    air_quality_mapping = {
+        'Good': 1,
+        'Hazardous': 4,
+        'Moderate': 2,
+        'Poor': 3
+    }
+    if 'Air Quality' in df.columns:
+        df['Air Quality'] = df['Air Quality'].map(air_quality_mapping)
     return df
 
 df = load_data()
 
-if st.checkbox("Показать сырые данные"):
-    st.write(df.head())
+with st.expander("Данные"):
+    st.write("**Сырые данные (первые 5 строк)**")
+    st.dataframe(df.head())
 
-# Выберем нужные столбцы
-columns = [
-    'Air Quality', 
-    'PM2.5', 
-    'PM10', 
-    'NO2', 
-    'SO2', 
-    'CO', 
-    'Temperature', 
-    'Humidity', 
-    'Proximity_to_Industrial_Areas'
-]
+# ========================
+# 2) Разделяем X и y
+# ========================
+# Предположим, что в df есть столбцы: Air Quality, PM2.5, PM10, NO2, SO2, CO, Temperature, Humidity, Proximity_to_Industrial_Areas
+# И хотим предсказывать 'Air Quality'
 
-# Фильтруем, если все есть в датасете
-available_cols = [c for c in columns if c in df.columns]
-df_filtered = df[available_cols].copy()
-
-# Переименуем для удобства (необязательно)
-df_filtered.columns = [
-    'Air Quality',
+features = [
     'PM2.5',
     'PM10',
     'NO2',
@@ -130,57 +53,104 @@ df_filtered.columns = [
     'CO',
     'Temperature',
     'Humidity',
-    'Industrial Proximity'
+    'Proximity_to_Industrial_Areas'
 ]
+target_col = 'Air Quality'
 
-# Удалим при желании PM2.5 — если вы так хотели в предыдущих кодах (необязательно)
-# df_filtered = df_filtered.drop(columns=['PM2.5'])
+X_raw = df[features].copy()
+y_raw = df[target_col].copy()
 
-# Разделяем X и y
-X = df_filtered.drop(columns=['Air Quality'])
-y = df_filtered['Air Quality']
+with st.expander("Преобразование данных"):
+    st.write("**Признаки (X_raw)**")
+    st.dataframe(X_raw.head())
+    st.write("**Целевая переменная (y_raw)**")
+    st.dataframe(y_raw.head())
 
-# Отображаем корреляции
+# ========================
+# 3) Визуализация данных (Plotly)
+# ========================
+
+# 2) Пример корреляции
 if st.checkbox("Показать корреляции"):
     st.subheader("Матрица корреляций")
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(df.corr(), annot=True, cmap="viridis", ax=ax)
     st.pyplot(fig)
 
-    # Построение scatter plot
-    st.subheader("Взаимосвязь между признаками")
-    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
-    for i, column in enumerate(pollution_data_filtered.columns[1:], start=1):
-        sns.scatterplot(data=pollution_data_filtered, x=column, y='Air Quality', ax=axes[(i - 1) // 3, (i - 1) % 3])
-    st.pyplot(fig)
+# 3) Scatter Plot (Seaborn)
+st.subheader("Пример Scatter-плота (Air Quality vs PM10)")
+fig, ax = plt.subplots(figsize=(7, 5))
+sns.scatterplot(data=df, x='PM10', y='Air Quality', ax=ax)
+ax.set_title("Air Quality vs. PM10")
+st.pyplot(fig)
 
-    # Графики разброса (scatter plots)
-    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
-    for i, col_name in enumerate(X.columns, start=1):
-        ax = axes[(i - 1) // 3, (i - 1) % 3]
-        sns.scatterplot(data=df_filtered, x=col_name, y='Air Quality', ax=ax)
-        ax.set_title(f'Air Quality vs {col_name}')
-    plt.tight_layout()
-    st.pyplot(fig)
+# 4) Histogram (Seaborn)
+st.subheader("Пример гистограммы (PM2.5)")
+fig2, ax2 = plt.subplots(figsize=(7, 5))
+sns.histplot(data=df, x='PM2.5', bins=30, kde=False, ax=ax2)
+ax2.set_title("Распределение PM2.5")
+st.pyplot(fig2)
 
-# Разделяем на train и test
-X_train, X_test, y_train, y_test = train_test_split(
-    X, 
-    y, 
-    test_size=0.2,
-    random_state=42
-)
+st.write("**Приложение завершено**")
+# ========================
+# 4) Пользовательский ввод (Sidebar)
+# ========================
+st.sidebar.header("Введите новые данные для прогноза:")
 
-# Создаем сетку гиперпараметров
+default_PM25 = float(df['PM2.5'].mean()) if 'PM2.5' in df.columns else 12.0
+PM25_val = st.sidebar.number_input("PM2.5", value=default_PM25)
+
+default_PM10 = float(df['PM10'].mean()) if 'PM10' in df.columns else 15.0
+PM10_val = st.sidebar.number_input("PM10", value=default_PM10)
+
+default_NO2 = float(df['NO2'].mean()) if 'NO2' in df.columns else 20.0
+NO2_val = st.sidebar.number_input("NO2", value=default_NO2)
+
+default_SO2 = float(df['SO2'].mean()) if 'SO2' in df.columns else 10.0
+SO2_val = st.sidebar.number_input("SO2", value=default_SO2)
+
+default_CO = float(df['CO'].mean()) if 'CO' in df.columns else 0.5
+CO_val = st.sidebar.number_input("CO", value=default_CO)
+
+default_temp = float(df['Temperature'].mean()) if 'Temperature' in df.columns else 25.0
+temp_val = st.sidebar.number_input("Temperature (°C)", value=default_temp)
+
+default_hum = float(df['Humidity'].mean()) if 'Humidity' in df.columns else 50.0
+hum_val = st.sidebar.number_input("Humidity (%)", value=default_hum)
+
+default_indus = float(df['Proximity_to_Industrial_Areas'].mean()) if 'Proximity_to_Industrial_Areas' in df.columns else 5.0
+indus_val = st.sidebar.number_input("Proximity_to_Industrial_Areas", value=default_indus)
+
+new_data = {
+    'PM2.5': PM25_val,
+    'PM10': PM10_val,
+    'NO2': NO2_val,
+    'SO2': SO2_val,
+    'CO': CO_val,
+    'Temperature': temp_val,
+    'Humidity': hum_val,
+    'Proximity_to_Industrial_Areas': indus_val
+}
+new_data_df = pd.DataFrame([new_data])
+
+# ========================
+# 5) Обучение модели (GridSearchCV)
+# ========================
+st.subheader("Обучение модели XGBRegressor")
+
+# Разделяем данные
+X_train, X_test, y_train, y_test = train_test_split(X_raw, y_raw, test_size=0.2, random_state=42)
+
+# Определяем сетку гиперпараметров
 param_grid = {
     'n_estimators': [50, 100],
     'max_depth': [3, 5],
     'learning_rate': [0.01, 0.1]
 }
 
-xgb_reg = XGBRegressor(random_state=42)
+model = XGBRegressor(random_state=42)
 grid_search = GridSearchCV(
-    estimator=xgb_reg,
+    estimator=model,
     param_grid=param_grid,
     cv=3,
     scoring='r2',
@@ -196,40 +166,27 @@ if st.button("Запустить GridSearchCV"):
     y_pred = best_model.predict(X_test)
     r2_val = r2_score(y_test, y_pred)
     mse_val = mean_squared_error(y_test, y_pred)
-    rmse_val = sqrt(mse_val)
+    st.write(f"**R² на тестовых данных**: {r2_val:.4f}")
+    st.write(f"**MSE на тестовых данных**: {mse_val:.4f}")
 
-    st.write(f"**R²** на тестовых данных: {r2_val:.4f}")
-    st.write(f"**MSE**: {mse_val:.4f}")
-    st.write(f"**RMSE**: {rmse_val:.4f}")
+    # Предсказание на новых данных (из sidebar)
+    pred_new = best_model.predict(new_data_df)[0]
+    st.write("### Прогноз для новых данных")
+    st.write("Вычисленное значение Air Quality (числовое):", round(pred_new, 2))
+
+    # Обратное отображение (если Air Quality = 1=Good, 2=Moderate, ... )
+    reverse_mapping = {1: 'Good', 2: 'Moderate', 3: 'Poor', 4: 'Hazardous'}
+    cat_pred_new = round(pred_new)
+    if cat_pred_new in reverse_mapping:
+        st.success(f"Согласно округлению, Air Quality: **{reverse_mapping[cat_pred_new]}**")
+    else:
+        st.info(f"Предсказанное значение: {cat_pred_new}, не в диапазоне [1..4]")
 
     # Важность признаков
-    st.subheader("Важность признаков (Best XGB Model)")
     feature_importances = best_model.feature_importances_
-    sorted_idx = np.argsort(feature_importances)[::-1]
-    sorted_feats = X_train.columns[sorted_idx]
-
-    fig_imp, ax_imp = plt.subplots()
-    ax_imp.barh(sorted_feats, feature_importances[sorted_idx])
-    ax_imp.set_title("Feature Importances")
-    ax_imp.invert_yaxis()
-    st.pyplot(fig_imp)
-
-    # Предсказание на новых данных
-    st.subheader("Прогноз (введите новые значения)")
-    input_data = {}
-    for col_name in X.columns:
-        default_val = float(X[col_name].mean())
-        input_data[col_name] = st.number_input(f"{col_name}", value=default_val)
-
-    new_data_df = pd.DataFrame([input_data])
-    if st.button("Сделать прогноз"):
-        pred_val = best_model.predict(new_data_df)[0]
-        st.write(f"**Предсказанный Air Quality**: {pred_val:.2f}")
-
-        # Пример обратной карты (если 1=Good, 2=Moderate, 3=Poor, 4=Hazardous)
-        reverse_mapping = {1: 'Good', 2: 'Moderate', 3: 'Poor', 4: 'Hazardous'}
-        cat_pred = round(pred_val)
-        cat_label = reverse_mapping.get(cat_pred, "Неизвестно")
-        st.write(f"**Категория (по округлению)**: {cat_label}")
+    st.write("**Важность признаков**")
+    for feat, imp in zip(X_train.columns, feature_importances):
+        st.write(f"{feat}: {imp:.3f}")
+    
 else:
-    st.info("Нажмите кнопку выше, чтобы запустить перебор гиперпараметров (GridSearchCV) и построить модель.")
+    st.write("Нажмите кнопку выше, чтобы запустить поиск по сетке гиперпараметров (GridSearchCV).")
