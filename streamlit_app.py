@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.title('My First Project')
+st.title('Прогнозирование качества воздуха')
 
 st.write('Here, I will deploy a classification model.')
 
