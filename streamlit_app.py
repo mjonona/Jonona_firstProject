@@ -1,86 +1,159 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import joblib
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.metrics import mean_squared_error, r2_score
+from math import sqrt
+from xgboost import XGBRegressor
+from catboost import CatBoostRegressor
 
-st.title('Прогнозирование качества воздуха')
+st.title("Прогноз качества воздуха")
 
-st.write('Here, I will deploy a classification model.')
+# Загрузка данных
+@st.cache
+def load_data():
+    # Загрузка данных
+    pollution_data = pd.read_csv("updated_pollution_dataset.csv")
+    pollution_data.columns = pollution_data.columns.str.strip()
+    
+    # Кодирование Air Quality
+    air_quality_mapping = {
+        'Good': 1,
+        'Hazardous': 4,
+        'Moderate': 2,
+        'Poor': 3
+    }
+    pollution_data['Air Quality'] = pollution_data['Air Quality'].map(air_quality_mapping)
+    
+    return pollution_data
 
-df = pd.read_csv("https://raw.githubusercontent.com/dataprofessor/data/master/penguins_cleaned.csv")
+pollution_data = load_data()
 
-with st.expander('Data'):
-  st.write("X")
-  X_raw = df.drop('species', axis=1)
-  st.dataframe(X_raw)
+# Отображение данных
+if st.checkbox("Показать данные"):
+    st.write(pollution_data)
 
-  st.write("y")
-  y_raw = df.species
-  st.dataframe(y_raw)
+# Подготовка данных
+columns = [
+    'Air Quality',
+    'PM2.5',
+    'PM10',
+    'NO2',
+    'SO2',
+    'CO',
+    'Temperature',
+    'Humidity',
+    'Proximity_to_Industrial_Areas'
+]
+pollution_data_filtered = pollution_data[columns]
+pollution_data_filtered = pollution_data_filtered.rename(columns={
+    'Proximity_to_Industrial_Areas': 'Industrial Proximity'
+})
 
-with st.sidebar:
-  st.header("Введите признаки: ")
-  island = st.selectbox('Island', ('Torgersen', 'Dream', 'Biscoe'))
-  bill_length_mm = st.slider('Bill length (mm)', 32.1, 59.6, 44.5)
-  bill_depth_mm = st.slider('Bill length (mm)', 13.1, 21.5, 17.3)
-  flipper_length_mm = st.slider('Flipper length (mm)', 32.1, 59.6, 44.5)
-  body_mass_g = st.slider('Body mass (g)', 32.1, 59.6, 44.5)
-  gender = st.selectbox('Gender', ('female', 'male'))
+# Вычисление корреляций
+if st.checkbox("Показать корреляции"):
+    correlations = pollution_data_filtered.corr()['Air Quality'][1:]
+    st.write(correlations)
 
-# Plotting some features
-st.subheader('Data Visualization')
-fig = px.scatter(
-    df,
-    x='bill_length_mm',
-    y='bill_depth_mm',
-    color='island',
-    title='Bill Length vs. Bill Depth by Island'
-)
-st.plotly_chart(fig)
+    # Построение scatter plot
+    st.subheader("Взаимосвязь между признаками")
+    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
+    for i, column in enumerate(pollution_data_filtered.columns[1:], start=1):
+        sns.scatterplot(data=pollution_data_filtered, x=column, y='Air Quality', ax=axes[(i - 1) // 3, (i - 1) % 3])
+    st.pyplot(fig)
 
-fig2 = px.histogram(
-    df, 
-    x='body_mass_g', 
-    nbins=30, 
-    title='Distribution of Body Mass'
-)
-st.plotly_chart(fig2)
+# Разделение данных
+X = pollution_data_filtered.drop(columns=['Air Quality', 'PM2.5'])
+y = pollution_data_filtered['Air Quality']
 
-## Preprocessing
-data = {
-    'island': island,
-    'bill_length_mm': bill_length_mm,
-    'bill_depth_mm': bill_depth_mm,
-    'flipper_length_mm': flipper_length_mm,
-    'body_mass_g': body_mass_g,
-    'sex': gender
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Обучение моделей
+st.subheader("Обучение моделей")
+param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [3, 5, 7],
+    'learning_rate': [0.01, 0.1, 0.2]
 }
-input_df = pd.DataFrame(data, index=[0])
-input_penguins = pd.concat([input_df, X_raw], axis=0)
+xgb_reg = XGBRegressor(random_state=42)
 
-with st.expander('Input features'):
-    st.write('**Input penguin**')
-    st.dataframe(input_df)
-    st.write('**Combined penguins data** (input row + original data)')
-    st.dataframe(input_penguins)
+# GridSearchCV
+st.write("Обучение XGBRegressor...")
+grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2', cv=3, verbose=0)
+grid_search.fit(X_train, y_train)
 
-encode = ['island', 'sex']
-df_penguins = pd.get_dummies(input_penguins, prefix=encode)
+best_model = grid_search.best_estimator_
+st.write(f"Лучшие параметры: {grid_search.best_params_}")
 
-# Separate the top row (our input) from the rest
-X = df_penguins[1:]
-input_row = df_penguins[:1]
+# Оценка на тестовых данных
+y_pred_best = best_model.predict(X_test)
+r2_best = r2_score(y_test, y_pred_best)
+st.write(f"R² для лучшей модели: {r2_best:.4f}")
 
-# Encode the target
-target_mapper = {'Adelie': 0, 'Chinstrap': 1, 'Gentoo': 2}
-def target_encode(val):
-    return target_mapper[val]
+# Кросс-валидация
+cv_scores = cross_val_score(best_model, X_train, y_train, cv=5, scoring='r2')
+st.write(f"Средний R² на кросс-валидации: {cv_scores.mean():.4f}")
 
-y = y_raw.apply(target_encode)
+# Сравнение CatBoost и XGB
+st.subheader("Сравнение моделей CatBoost и XGB")
 
-with st.expander('Data preparation'):
-    st.write('**Encoded X (input penguin)**')
-    st.dataframe(input_row)
-    st.write('**Encoded y**')
-    st.write(y)
+catboost_reg = CatBoostRegressor(
+    iterations=100,
+    depth=5,
+    learning_rate=0.1,
+    random_seed=42,
+    verbose=False
+)
+catboost_reg.fit(X_train, y_train)
+y_pred_cat = catboost_reg.predict(X_test)
+mse_cat = mean_squared_error(y_test, y_pred_cat)
+r2_cat = r2_score(y_test, y_pred_cat)
 
+xgb_reg = XGBRegressor(
+    n_estimators=100,
+    max_depth=5,
+    learning_rate=0.1,
+    random_state=42
+)
+xgb_reg.fit(X_train, y_train)
+y_pred_xgb = xgb_reg.predict(X_test)
+mse_xgb = mean_squared_error(y_test, y_pred_xgb)
+r2_xgb = r2_score(y_test, y_pred_xgb)
 
+st.write("CatBoostRegressor:")
+st.write(f"MSE: {mse_cat:.4f}, R²: {r2_cat:.4f}")
+st.write("XGBRegressor:")
+st.write(f"MSE: {mse_xgb:.4f}, R²: {r2_xgb:.4f}")
+
+# Важность признаков
+st.subheader("Важность признаков")
+feature_importances = best_model.feature_importances_
+indices = np.argsort(feature_importances)[::-1]
+names = [X_train.columns[i] for i in indices]
+
+fig, ax = plt.subplots()
+ax.barh(names, feature_importances[indices])
+ax.set_title("Важность признаков")
+st.pyplot(fig)
+
+# Предсказание новых данных
+st.subheader("Предсказание")
+new_data = {
+    'PM10': st.number_input("PM10", value=17.9),
+    'NO2': st.number_input("NO2", value=18.9),
+    'SO2': st.number_input("SO2", value=9.2),
+    'CO': st.number_input("CO", value=1.72),
+    'Temperature': st.number_input("Temperature", value=29.8),
+    'Humidity': st.number_input("Humidity", value=59.1),
+    'Industrial Proximity': st.number_input("Industrial Proximity", value=6.3)
+}
+new_data_df = pd.DataFrame([new_data])
+
+if st.button("Сделать прогноз"):
+    prediction = best_model.predict(new_data_df)[0]
+    reverse_mapping = {1: 'Good', 2: 'Moderate', 3: 'Poor', 4: 'Hazardous'}
+    predicted_category = round(prediction)
+    st.write(f"Прогнозируемое качество воздуха: {reverse_mapping[predicted_category]}")
