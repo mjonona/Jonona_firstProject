@@ -141,10 +141,11 @@ X = df_filtered.drop(columns=['Air Quality'])
 y = df_filtered['Air Quality']
 
 # Отображаем корреляции
-# Вычисление корреляций
 if st.checkbox("Показать корреляции"):
-    correlations = pollution_data_filtered.corr()['Air Quality'][1:]
-    st.write(correlations)
+    st.subheader("Матрица корреляций")
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.heatmap(df.corr(), annot=True, cmap="viridis", ax=ax)
+    st.pyplot(fig)
 
     # Построение scatter plot
     st.subheader("Взаимосвязь между признаками")
