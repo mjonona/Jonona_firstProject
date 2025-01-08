@@ -12,6 +12,25 @@ from math import sqrt
 from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
 
+from sklearn.base import BaseEstimator, RegressorMixin
+
+class CustomXGBRegressor(BaseEstimator, RegressorMixin):
+    def __init__(self, **params):
+        self.model = XGBRegressor(**params)
+    
+    def fit(self, X, y):
+        self.model.fit(X, y)
+        return self
+    
+    def predict(self, X):
+        return self.model.predict(X)
+    
+    def __sklearn_tags__(self):
+        return {"estimator_type": "regressor"}
+
+xgb_reg = CustomXGBRegressor(random_state=42)
+grid_search = GridSearchCV(estimator=xgb_reg, param_grid=param_grid, scoring='r2', cv=3)
+
 st.title("Прогноз качества воздуха")
 
 # Загрузка Данных
