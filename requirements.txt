@@ -5,5 +5,5 @@ seaborn
 joblib
 scikit-learn
 xgboost
-numpy>=1.22.0
-catboost>=1.2.7
+numpy
+catboost
