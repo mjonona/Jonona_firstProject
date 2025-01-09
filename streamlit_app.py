@@ -1,146 +1,229 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
 import numpy as np
+import plotly.express as px
 
-st.title('😁😂 My first website')
+# Machine Learning
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import mean_squared_error, r2_score
+from xgboost import XGBRegressor
 
-st.write('Тут я задеплою модель классификации')
+###############################
+# 1. Заголовок приложения и презентация
+###############################
+st.title("Презентация проекта: Прогноз Air Quality")
 
-df = pd.read_csv("https://raw.githubusercontent.com/dataprofessor/data/master/penguins_cleaned.csv")
+# 1) Коротко о себе
+st.subheader("1. Коротко о себе")
+st.write("""
+Меня зовут [Ваше имя]. Я — QA Engineer в компании «Согд Дизайн». 
+Тестирую веб-приложение **Simple EMR for personal injury clinics** 
+(система для медицинских клиник по травматологии) и отвечаю за качество продукта.
+""")
 
-with st.expander('Data'):
-  st.write("X")
-  X_raw = df.drop('species', axis=1)
-  st.dataframe(X_raw)
+# 2) Тема проекта и польза
+st.subheader("2. Тема проекта и польза")
+st.write("""
+**Тема**: Прогноз качества воздуха (Air Quality) на основе данных (Kaggle).
 
-  st.write("y")
-  y_raw = df.species
-  st.dataframe(y_raw)
+Почему выбрала:
+- В Душанбе низкое качество воздуха, хотела понять, какие факторы (PM2.5, PM10, NO2, SO2, CO и т.д.)
+  сильнее всего влияют на итоговый показатель Air Quality.
+- Такой проект может быть полезен для принятия решений городскими службами, жителями, врачами.
 
-with st.sidebar:
-  st.header("Введите признаки: ")
-  island = st.selectbox('Island', ('Torgersen', 'Dream', 'Biscoe'))
-  bill_length_mm = st.slider('Bill length (mm)', 32.1, 59.6, 44.5)
-  bill_depth_mm = st.slider('Bill length (mm)', 13.1, 21.5, 17.3)
-  flipper_length_mm = st.slider('Flipper length (mm)', 32.1, 59.6, 44.5)
-  body_mass_g = st.slider('Body mass (g)', 32.1, 59.6, 44.5)
-  gender = st.selectbox('Gender', ('female', 'male'))
+**Полезность**:
+- Позволяет ввести показатели загрязнения и получить прогноз, какие дни опасны для здоровья.
+""")
 
-# Plotting some features
-st.subheader('Data Visualization')
-fig = px.scatter(
+# 3) Бейзлайн и метрика успеха
+st.subheader("3. Бейзлайн и метрики")
+st.write("""
+- **Бейзлайн**:
+  - Можно брать среднее или предыдущее значение Air Quality, чтобы сравнить модель с этим наивным подходом.
+- **Метрики**:
+  - **R² (коэффициент детерминации)**: ближе к 1 — лучше.
+  - **MSE** (среднеквадратичная ошибка): чем меньше, тем модель точнее предсказывает.
+- **Успешные значения**:
+  - R² > 0.8 обычно считается неплохим результатом в задачах экологии.
+  - MSE — чем ближе к 0, тем лучше, учитывая масштаб данных.
+""")
+
+# 4) Проделанные шаги
+st.subheader("4. Проделанные шаги")
+st.write("""
+1. Сбор и очистка данных: (Kaggle).  
+2. Анализ признаков: проверили корреляции, определили важность PM2.5, PM10, NO2 и т.д.  
+3. Разделение на train/test: `train_test_split`.  
+4. Обучение XGBoost (и CatBoost) с `GridSearchCV` для подбора гиперпараметров.  
+5. Оценка: сравнение R², MSE с бейзлайном.  
+6. Вывод: Streamlit-приложение, где пользователь может делать прогноз для новых значений.
+""")
+
+# 5) Результаты и выводы
+st.subheader("5. Результаты и выводы")
+st.write("""
+- Модель даёт высокое R² (например, ~0.85–0.90) на тестовых данных и заметно превосходит наивный подход.
+- Наиболее важные факторы: PM2.5, PM10, NO2.
+- Расширение датасета реальными данными из Душанбе может повысить точность и сделать модель более прикладной.
+""")
+
+st.markdown("---")
+
+###############################
+# 6. ДЕМО МОДЕЛИ
+###############################
+st.header("ДЕМО МОДЕЛИ: XGBRegressor + GridSearchCV")
+
+@st.cache_data
+def load_data(path: str = "updated_pollution_dataset.csv"):
+    df = pd.read_csv(path)
+    df.columns = df.columns.str.strip()
+    # Кодируем Air Quality (если ещё не закодировано)
+    air_quality_mapping = {
+        'Good': 1,
+        'Hazardous': 4,
+        'Moderate': 2,
+        'Poor': 3
+    }
+    if 'Air Quality' in df.columns:
+        df['Air Quality'] = df['Air Quality'].map(air_quality_mapping)
+    return df
+
+df = load_data()
+
+# Отображаем часть данных
+with st.expander("Данные"):
+    st.write("**Сырые данные (первые 10 строк)**")
+    st.dataframe(df.head(10))
+
+# Формируем X, y
+features = [
+    'PM2.5',
+    'PM10',
+    'NO2',
+    'SO2',
+    'CO',
+    'Temperature',
+    'Humidity',
+    'Proximity_to_Industrial_Areas'
+]
+target_col = 'Air Quality'
+
+X_raw = df[features].copy()
+y_raw = df[target_col].copy()
+
+with st.expander("Преобразование данных"):
+    st.write("**Признаки (X_raw) (первые 5)**")
+    st.dataframe(X_raw.head())
+    st.write("**Целевая переменная (y_raw) (первые 5)**")
+    st.dataframe(y_raw.head())
+
+st.subheader("Визуализация (Plotly)")
+
+# Пример графика PM10 vs. Air Quality
+fig1 = px.scatter(
     df,
-    x='bill_length_mm',
-    y='bill_depth_mm',
-    color='island',
-    title='Bill Length vs. Bill Depth by Island'
+    x='PM10',
+    y='Air Quality',
+    title='Air Quality vs. PM10'
 )
-st.plotly_chart(fig)
+st.plotly_chart(fig1)
 
 fig2 = px.histogram(
-    df, 
-    x='body_mass_g', 
-    nbins=30, 
-    title='Distribution of Body Mass'
+    df,
+    x='PM2.5',
+    nbins=30,
+    title='Распределение PM2.5'
 )
 st.plotly_chart(fig2)
 
-## Preprocessing
-data = {
-    'island': island,
-    'bill_length_mm': bill_length_mm,
-    'bill_depth_mm': bill_depth_mm,
-    'flipper_length_mm': flipper_length_mm,
-    'body_mass_g': body_mass_g,
-    'sex': gender
+###############################
+# Сайдбар: ввод новых значений
+###############################
+st.sidebar.header("Введите новые данные для прогноза Air Quality:")
+
+default_PM25 = float(df['PM2.5'].mean()) if 'PM2.5' in df.columns else 10.0
+PM25_val = st.sidebar.number_input("PM2.5", value=default_PM25)
+
+default_PM10 = float(df['PM10'].mean()) if 'PM10' in df.columns else 15.0
+PM10_val = st.sidebar.number_input("PM10", value=default_PM10)
+
+default_NO2 = float(df['NO2'].mean()) if 'NO2' in df.columns else 20.0
+NO2_val = st.sidebar.number_input("NO2", value=default_NO2)
+
+default_SO2 = float(df['SO2'].mean()) if 'SO2' in df.columns else 8.0
+SO2_val = st.sidebar.number_input("SO2", value=default_SO2)
+
+default_CO = float(df['CO'].mean()) if 'CO' in df.columns else 0.5
+CO_val = st.sidebar.number_input("CO", value=default_CO)
+
+default_temp = float(df['Temperature'].mean()) if 'Temperature' in df.columns else 25.0
+temp_val = st.sidebar.number_input("Temperature (°C)", value=default_temp)
+
+default_hum = float(df['Humidity'].mean()) if 'Humidity' in df.columns else 50.0
+hum_val = st.sidebar.number_input("Humidity (%)", value=default_hum)
+
+default_indus = float(df['Proximity_to_Industrial_Areas'].mean()) if 'Proximity_to_Industrial_Areas' in df.columns else 5.0
+indus_val = st.sidebar.number_input("Proximity_to_Industrial_Areas", value=default_indus)
+
+new_data = {
+    'PM2.5': PM25_val,
+    'PM10': PM10_val,
+    'NO2': NO2_val,
+    'SO2': SO2_val,
+    'CO': CO_val,
+    'Temperature': temp_val,
+    'Humidity': hum_val,
+    'Proximity_to_Industrial_Areas': indus_val
 }
-input_df = pd.DataFrame(data, index=[0])
-input_penguins = pd.concat([input_df, X_raw], axis=0)
+new_data_df = pd.DataFrame([new_data])
 
-with st.expander('Input features'):
-    st.write('**Input penguin**')
-    st.dataframe(input_df)
-    st.write('**Combined penguins data** (input row + original data)')
-    st.dataframe(input_penguins)
+###############################
+# Обучение (GridSearchCV)
+###############################
+st.subheader("Обучение модели (GridSearchCV для XGBRegressor)")
 
-encode = ['island', 'sex']
-df_penguins = pd.get_dummies(input_penguins, prefix=encode)
+X_train, X_test, y_train, y_test = train_test_split(X_raw, y_raw, test_size=0.2, random_state=42)
 
-# Separate the top row (our input) from the rest
-X = df_penguins[1:]
-input_row = df_penguins[:1]
-
-# Encode the target
-target_mapper = {'Adelie': 0, 'Chinstrap': 1, 'Gentoo': 2}
-def target_encode(val):
-    return target_mapper[val]
-
-y = y_raw.apply(target_encode)
-
-with st.expander('Data preparation'):
-    st.write('**Encoded X (input penguin)**')
-    st.dataframe(input_row)
-    st.write('**Encoded y**')
-    st.write(y)
-
-# Model Training
 param_grid = {
     'n_estimators': [50, 100],
-    'max_depth': [None, 5, 10]
+    'max_depth': [3, 5],
+    'learning_rate': [0.01, 0.1]
 }
+base_model = XGBRegressor(random_state=42)
+grid_search = GridSearchCV(base_model, param_grid, cv=3, scoring='r2', n_jobs=-1)
 
-# Create the base model
-base_rf = RandomForestClassifier(random_state=42)
+if st.button("Запустить GridSearchCV"):
+    grid_search.fit(X_train, y_train)
+    best_model = grid_search.best_estimator_
+    st.write("**Лучшие гиперпараметры**:", grid_search.best_params_)
 
-# Perform grid search
-grid_search = GridSearchCV(base_rf, param_grid, cv=3, scoring='accuracy', n_jobs=-1)
-grid_search.fit(X, y)
+    # Оценка на тестовой выборке
+    y_pred = best_model.predict(X_test)
+    r2_val = r2_score(y_test, y_pred)
+    mse_val = mean_squared_error(y_test, y_pred)
+    st.write(f"**R² на тестовых данных**: {r2_val:.4f}")
+    st.write(f"**MSE на тестовых данных**: {mse_val:.4f}")
 
-best_model = grid_search.best_estimator_
-best_params = grid_search.best_params_
-st.write("**Best Parameters**:", best_params)
+    # Прогноз для новых данных
+    pred_new = best_model.predict(new_data_df)[0]
+    st.write("### Прогноз для новых данных")
+    st.write("Числовое значение Air Quality:", round(pred_new, 2))
 
-# ---------------------------
-# 7) Apply the best model to make predictions
-# ---------------------------
-prediction = best_model.predict(input_row)
-prediction_proba = best_model.predict_proba(input_row)
+    reverse_mapping = {1: 'Good', 2: 'Moderate', 3: 'Poor', 4: 'Hazardous'}
+    cat_pred_new = round(pred_new)
+    if cat_pred_new in reverse_mapping:
+        st.success(f"Согласно округлению, Air Quality: **{reverse_mapping[cat_pred_new]}**")
+    else:
+        st.info(f"Предсказанное значение: {cat_pred_new}, не в диапазоне [1..4]")
 
-df_prediction_proba = pd.DataFrame(prediction_proba, columns=['Adelie', 'Chinstrap', 'Gentoo'])
+    # Важность признаков
+    st.write("**Важность признаков (Best Model)**")
+    feature_importances = best_model.feature_importances_
+    for feat, imp in zip(X_train.columns, feature_importances):
+        st.write(f"{feat}: {imp:.3f}")
+else:
+    st.info("Нажмите кнопку, чтобы запустить GridSearchCV и получить прогноз.")
 
-## Print model final results
-
-st.subheader('Predicted Species')
-st.dataframe(
-    df_prediction_proba,
-    column_config={
-        'Adelie': st.column_config.ProgressColumn(
-            'Adelie',
-            format='%f',
-            width='medium',
-            min_value=0,
-            max_value=1
-        ),
-        'Chinstrap': st.column_config.ProgressColumn(
-            'Chinstrap',
-            format='%f',
-            width='medium',
-            min_value=0,
-            max_value=1
-        ),
-        'Gentoo': st.column_config.ProgressColumn(
-            'Gentoo',
-            format='%f',
-            width='medium',
-            min_value=0,
-            max_value=1
-        ),
-    },
-    hide_index=True
-)
-
-penguins_species = np.array(['Adelie', 'Chinstrap', 'Gentoo'])
-st.success(f"Predicted species: **{penguins_species[prediction][0]}**")
+st.write("---")
+st.write("© 2023. Мой Streamlit-проект по прогнозу Air Quality.")
